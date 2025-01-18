@@ -1,0 +1,77 @@
+msgid ""
+msgstr ""
+"Project-Id-Version: Daraza Payments 1.0\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2025-01-18\n"
+"PO-Revision-Date: \n"
+"Last-Translator: \n"
+"Language-Team: \n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+"X-Generator: \n"
+
+#: daraza-payments.php:20
+msgid "Daraza Payments requires WooCommerce to be installed and active."
+msgstr ""
+
+#: daraza-payments.php:46
+msgid "Daraza API key is missing. Please configure it in the Daraza payment settings."
+msgstr ""
+
+#: includes/class-daraza-gateway.php:22
+msgid "Enable Daraza Payments"
+msgstr ""
+
+#: includes/class-daraza-gateway.php:27
+msgid "Title"
+msgstr ""
+
+#: includes/class-daraza-gateway.php:28
+msgid "This controls the title displayed during checkout."
+msgstr ""
+
+#: includes/class-daraza-gateway.php:35
+msgid "Description"
+msgstr ""
+
+#: includes/class-daraza-gateway.php:36
+msgid "Provide details about the payment method displayed during checkout."
+msgstr ""
+
+#: includes/class-daraza-gateway.php:43
+msgid "API Key"
+msgstr ""
+
+#: includes/class-daraza-gateway.php:44
+msgid "Your Daraza API key."
+msgstr ""
+
+#: includes/class-daraza-gateway.php:50
+msgid "Enable Logging"
+msgstr ""
+
+#: includes/class-daraza-gateway.php:51
+msgid "Log API requests and responses"
+msgstr ""
+
+#: includes/class-daraza-gateway.php:66
+msgid "Payment failed: Unknown error"
+msgstr ""
+
+#: includes/class-daraza-gateway.php:74
+msgid "Payment successful via Daraza."
+msgstr ""
+
+#: includes/class-daraza-api.php:33
+msgid "API Key is missing."
+msgstr ""
+
+#: includes/class-daraza-api.php:83
+msgid "Invalid JSON response from the API."
+msgstr ""
+
+#: includes/class-daraza-api.php:92
+msgid "Daraza API Response Error"
+msgstr ""
