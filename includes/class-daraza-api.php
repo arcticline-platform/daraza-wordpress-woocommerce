@@ -90,7 +90,7 @@ class Daraza_API {
                 'phone' => $phone,
                 'note' => $note,
             ]),
-            'timeout' => 45,
+            'timeout' => 180, // Increased timeout to 3 minutes
         ]);
 
         return $this->process_response($response, 'request_to_pay');
@@ -120,7 +120,7 @@ class Daraza_API {
                 'phone' => $phone,
                 'note' => $note,
             ]),
-            'timeout' => 45,
+            'timeout' => 180, // Increased timeout to 3 minutes
         ]);
 
         return $this->process_response($response, 'remit');
@@ -132,7 +132,7 @@ class Daraza_API {
      * @param WP_HTTP_Response $response API response.
      * @param string $context Context for the request.
      * @return array Parsed response or error message.
-     */
+    */
     private function process_response($response, $context) {
         if (is_wp_error($response)) {
             $error_message = $response->get_error_message();
@@ -147,9 +147,19 @@ class Daraza_API {
             return ['status' => 'error', 'message' => __('Invalid JSON response.', 'daraza-payments')];
         }
 
-        if (isset($body['status']) && $body['status'] === 'error') {
-            $this->log_error($body['message'], $context);
-            return ['status' => 'error', 'message' => $body['message']];
+        // If the API returned an error status, log details if available.
+        if (isset($body['status']) && strtolower($body['status']) === 'error') {
+            $error_message = $body['message'];
+            if (isset($body['details']) && !empty($body['details'])) {
+                $this->log_error("API Error Details: " . $body['details'], $context);
+                $error_message .= ' - ' . $body['details'];
+            }
+            $this->log_error("API Error: " . $error_message, $context);
+            return [
+                'status'  => 'error',
+                'message' => $error_message,
+                'details' => $body['details'] ?? ''
+            ];
         }
 
         $this->log_info("API Response Success: {$context}", $body);

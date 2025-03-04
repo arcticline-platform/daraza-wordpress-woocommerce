@@ -8,7 +8,7 @@
  * Author URI: https://daraza.net
  * Text Domain: daraza-payments
  * Domain Path: /languages
- */
+*/
 
 if (!defined('ABSPATH')) {
     exit; // Exit if accessed directly
@@ -46,12 +46,17 @@ function daraza_initialize_plugin() {
     if (class_exists('WooCommerce')) {
         // WooCommerce-specific functionality
         require_once DARAZA_PAYMENTS_DIR . 'includes/class-daraza-gateway.php';
+        require_once DARAZA_PAYMENTS_DIR . 'includes/class-daraza-rtp-gateway.php';
 
         add_filter('woocommerce_payment_gateways', 'daraza_add_woocommerce_gateway');
+
         function daraza_add_woocommerce_gateway($gateways) {
             $gateways[] = 'Daraza_Gateway';
+            $gateways[] = 'WC_Daraza_RTP_Gateway'; // Add the Request to Pay gateway
+            
             return $gateways;
         }
+
     } else {
         // General WordPress-specific functionality
         add_action('admin_menu', 'daraza_add_admin_menu');
@@ -196,7 +201,7 @@ function daraza_admin_dashboard() {
 
 
 
-// Wallet balance page
+// Wallet Balance Admin Page
 function daraza_wallet_balance_page() {
     // Ensure only authorized users can access this page
     if (!current_user_can('manage_options')) {
@@ -244,7 +249,7 @@ function daraza_wallet_balance_page() {
     echo '</div>';
 }
 
-// Remittance page
+// Remittance Admin Page
 function daraza_remittance_page() {
     if (!current_user_can('manage_options')) {
         wp_die(__('You do not have sufficient permissions to access this page.', 'daraza-payments'));
@@ -394,3 +399,327 @@ function daraza_api_key_field() {
     $value = get_option('daraza_api_key', '');
     echo '<input type="text" id="daraza_api_key" name="daraza_api_key" value="' . esc_attr($value) . '" class="regular-text">';
 }
+
+/* *********** Short Codes ****************** */
+// Shortcode to display a "Request to Pay" button/form
+function daraza_request_to_pay_shortcode($atts) {
+    // Extract attributes (amount and reference can be passed in the shortcode)
+    $atts = shortcode_atts([
+        'amount' => '10', // Default amount
+        'reference' => 'PaymentRef-' . uniqid(), // Default unique reference
+    ], $atts, 'daraza_request_to_pay');
+
+    // Nonce for security
+    $nonce = wp_create_nonce('daraza_rtp_nonce');
+
+    // Generate form
+    ob_start();
+    ?>
+    <style>
+        .daraza-payment-container {
+            max-width: 400px;
+            margin: 20px auto;
+            padding: 20px;
+            border-radius: 8px;
+            background-color: #ffffff;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+            text-align: center;
+            font-family: Arial, sans-serif;
+        }
+        .daraza-input {
+            width: 100%;
+            padding: 10px;
+            margin-top: 10px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            font-size: 14px;
+        }
+        .daraza-button {
+            display: inline-block;
+            width: 100%;
+            padding: 12px;
+            margin-top: 15px;
+            font-size: 16px;
+            font-weight: bold;
+            background: #007bff;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: background 0.3s ease;
+        }
+        .daraza-button:hover {
+            background: #0056b3;
+        }
+        .daraza-loading {
+            display: none;
+            margin-top: 10px;
+            font-size: 14px;
+            color: #555;
+        }
+        .daraza-payment-status {
+            margin-top: 15px;
+            font-size: 14px;
+            font-weight: bold;
+            color: #333;
+        }
+    </style>
+
+    <div class="daraza-payment-container">
+        <h3>Complete Your Payment</h3>
+        <p>Amount: <strong><?php echo esc_html($atts['amount']); ?> UGX</strong></p>
+        <p>Reference: <strong><?php echo esc_html($atts['reference']); ?></strong></p>
+        
+        <form id="daraza-rtp-form">
+            <input type="hidden" id="daraza_rtp_amount" value="<?php echo esc_attr($atts['amount']); ?>">
+            <input type="hidden" id="daraza_rtp_reference" value="<?php echo esc_attr($atts['reference']); ?>">
+            <input type="hidden" id="daraza_rtp_nonce" value="<?php echo esc_attr($nonce); ?>">
+
+            <input type="tel" id="daraza_rtp_phone" class="daraza-input" placeholder="Enter your phone number" required>
+
+            <button type="button" id="daraza-request-pay" class="daraza-button">
+                Pay Now
+            </button>
+        </form>
+        
+        <div id="daraza-loading" class="daraza-loading">Processing your payment...</div>
+        <div id="daraza-payment-status" class="daraza-payment-status"></div>
+    </div>
+
+    <script>
+    jQuery(document).ready(function($) {
+        $('#daraza-request-pay').on('click', function() {
+            let button = $(this);
+            let loading = $('#daraza-loading');
+            let statusDiv = $('#daraza-payment-status');
+            let phone = $('#daraza_rtp_phone').val().trim();
+
+            // Validate phone number
+            if (!phone.match(/^\d{10,12}$/)) {
+                statusDiv.css('color', 'red').text('Please enter a valid phone number.');
+                return;
+            }
+
+            let data = {
+                action: 'daraza_request_to_pay',
+                amount: $('#daraza_rtp_amount').val(),
+                reference: $('#daraza_rtp_reference').val(),
+                phone: phone,
+                nonce: $('#daraza_rtp_nonce').val(),
+            };
+
+            // Disable button & show loading
+            button.prop('disabled', true).text('Processing...');
+            loading.show();
+            statusDiv.text('');
+
+            $.post('<?php echo admin_url("admin-ajax.php"); ?>', data, function(response) {
+                if (response.success) {
+                    statusDiv.css('color', 'green').html(response.message);
+                } else {
+                    statusDiv.css('color', 'red').html(response.message || 'Payment failed. Please try again.');
+                }
+            }).fail(function() {
+                statusDiv.css('color', 'red').html('Error processing payment. Please check your connection.');
+            }).always(function() {
+                button.prop('disabled', false).text('Pay Now');
+                loading.hide();
+            });
+        });
+    });
+    </script>
+    <?php
+    return ob_get_clean();
+}
+
+// Shortcode to display a Daraza Request to Pay checkout form
+// Shortcode to display a Daraza Request to Pay checkout form
+function daraza_checkout_shortcode($atts) {
+    // Set up a nonce for security
+    $nonce = wp_create_nonce('daraza_checkout_nonce');
+
+    ob_start(); ?>
+    <style>
+        .daraza-payment-container {
+            max-width: 400px;
+            margin: 20px auto;
+            padding: 20px;
+            border-radius: 8px;
+            background-color: #ffffff;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+            text-align: center;
+            font-family: Arial, sans-serif;
+        }
+        .daraza-input {
+            width: 100%;
+            padding: 10px;
+            margin: 10px 0;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            font-size: 14px;
+        }
+        .daraza-label {
+            display: block;
+            text-align: left;
+            font-weight: bold;
+            margin-top: 15px;
+        }
+        .daraza-button {
+            display: inline-block;
+            width: 100%;
+            padding: 12px;
+            margin-top: 15px;
+            font-size: 16px;
+            font-weight: bold;
+            background: #007bff;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: background 0.3s ease;
+        }
+        .daraza-button:hover {
+            background: #0056b3;
+        }
+        .daraza-loading {
+            display: none;
+            margin-top: 10px;
+            font-size: 14px;
+            color: #555;
+        }
+        .daraza-response {
+            margin-top: 15px;
+            font-size: 14px;
+            font-weight: bold;
+            color: #333;
+        }
+    </style>
+
+    <div class="daraza-payment-container">
+        <h3><?php _e('Complete Your Payment', 'daraza-payments'); ?></h3>
+        <form id="daraza-checkout-form" method="post">
+            <label for="daraza_checkout_phone" class="daraza-label"><?php _e('Phone Number:', 'daraza-payments'); ?></label>
+            <input type="text" name="daraza_checkout_phone" id="daraza_checkout_phone" class="daraza-input" placeholder="<?php _e('Enter your phone number', 'daraza-payments'); ?>" required>
+
+            <label for="daraza_checkout_amount" class="daraza-label"><?php _e('Amount:', 'daraza-payments'); ?></label>
+            <input type="number" name="daraza_checkout_amount" id="daraza_checkout_amount" class="daraza-input" min="1" step="0.01" placeholder="<?php _e('Enter amount', 'daraza-payments'); ?>" required>
+
+            <label for="daraza_checkout_reference" class="daraza-label"><?php _e('Reference:', 'daraza-payments'); ?></label>
+            <input type="text" name="daraza_checkout_reference" id="daraza_checkout_reference" class="daraza-input" placeholder="<?php _e('Enter reference', 'daraza-payments'); ?>" required>
+
+            <input type="hidden" name="daraza_checkout_nonce" value="<?php echo esc_attr($nonce); ?>">
+
+            <button type="submit" id="daraza-checkout-submit" class="daraza-button"><?php _e('Pay Now', 'daraza-payments'); ?></button>
+        </form>
+        <div id="daraza-loading" class="daraza-loading"><?php _e('Processing your payment...', 'daraza-payments'); ?></div>
+        <div id="daraza-checkout-response" class="daraza-response"></div>
+    </div>
+
+    <script>
+    jQuery(document).ready(function($) {
+        $('#daraza-checkout-form').on('submit', function(e) {
+            e.preventDefault();
+            var data = {
+                action: 'daraza_checkout_payment',
+                nonce: $('input[name="daraza_checkout_nonce"]').val(),
+                phone: $('#daraza_checkout_phone').val(),
+                amount: $('#daraza_checkout_amount').val(),
+                reference: $('#daraza_checkout_reference').val()
+            };
+
+            $('#daraza-loading').show();
+            $('#daraza-checkout-response').html('');
+            $.post('<?php echo admin_url("admin-ajax.php"); ?>', data, function(response) {
+                if(response.status === 'success'){
+                    $('#daraza-checkout-response').html('<p style="color: green;">' + response.message + '</p>');
+                } else {
+                    $('#daraza-checkout-response').html('<p style="color: red;">' + response.message + '</p>');
+                }
+            }).fail(function() {
+                $('#daraza-checkout-response').html('<p style="color: red;"><?php _e('An error occurred. Please try again.', 'daraza-payments'); ?></p>');
+            }).always(function() {
+                $('#daraza-loading').hide();
+            });
+        });
+    });
+    </script>
+    <?php
+    return ob_get_clean();
+}
+add_shortcode('daraza_payments', 'daraza_checkout_shortcode');
+
+// Handle AJAX Request to Pay
+function daraza_handle_request_to_pay() {
+    // Verify nonce
+    check_ajax_referer('daraza_rtp_nonce', 'nonce');
+
+    $amount = isset($_POST['amount']) ? floatval($_POST['amount']) : 0;
+    $reference = isset($_POST['reference']) ? sanitize_text_field($_POST['reference']) : '';
+    $phone = isset($_POST['phone']) ? sanitize_text_field($_POST['phone']) : '';
+
+    if ($amount <= 0 || empty($reference) || empty($phone)) {
+        wp_send_json(['status' => 'error', 'message' => __('Invalid payment details.', 'daraza-payments')]);
+    }
+
+    // Get API key
+    $api_key = get_option('daraza_api_key');
+    $api = new Daraza_API($api_key);
+
+    // Send Request to Pay including the phone number
+    $response = $api->request_to_pay($amount, $phone, $reference);
+
+    if (!empty($response['status']) && $response['status'] === 'Success') {
+        wp_send_json(['status' => 'success', 'message' => __('Payment request sent successfully.', 'daraza-payments')]);
+    } else {
+        wp_send_json(['status' => 'error', 'message' => __('Payment request failed.', 'daraza-payments')]);
+    }
+
+    // Return the complete API response
+    // if (!empty($response['status']) && $response['status'] === 'Success') {
+    //     wp_send_json(array_merge(['status' => 'success'], $response));
+    // } else {
+    //     wp_send_json(array_merge(['status' => 'error'], $response));
+    // }
+}
+
+add_action('wp_ajax_daraza_request_to_pay', 'daraza_handle_request_to_pay');
+add_action('wp_ajax_nopriv_daraza_request_to_pay', 'daraza_handle_request_to_pay');
+
+
+function daraza_handle_checkout_payment() {
+    // Verify nonce
+    if ( ! isset( $_POST['nonce'] ) || ! wp_verify_nonce( $_POST['nonce'], 'daraza_checkout_nonce' ) ) {
+        wp_send_json(['status' => 'error', 'message' => __('Security check failed.', 'daraza-payments')]);
+    }
+
+    $phone     = sanitize_text_field($_POST['phone']);
+    $amount    = floatval($_POST['amount']);
+    $reference = sanitize_text_field($_POST['reference']);
+
+    if ( empty($phone) || $amount <= 0 || empty($reference) ) {
+        wp_send_json(['status' => 'error', 'message' => __('Please fill in all required fields.', 'daraza-payments')]);
+    }
+
+    // Retrieve the API key saved in settings
+    $api_key = get_option('daraza_api_key');
+    if ( empty($api_key) ) {
+        wp_send_json(['status' => 'error', 'message' => __('API Key not configured.', 'daraza-payments')]);
+    }
+
+    $api = new Daraza_API($api_key);
+    $response = $api->request_to_pay($amount, $phone, $reference);
+
+    // Return full response details
+    if ( ! empty($response['status']) && strtolower($response['status']) === 'success' ) {
+        wp_send_json(array_merge(['status' => 'success'], $response));
+    } else {
+        wp_send_json(array_merge(['status' => 'error'], $response));
+    }
+}
+add_action('wp_ajax_daraza_checkout_payment', 'daraza_handle_checkout_payment');
+add_action('wp_ajax_nopriv_daraza_checkout_payment', 'daraza_handle_checkout_payment');
+
+
+// Shortcode Registration
+add_shortcode('daraza_request_to_pay', 'daraza_request_to_pay_shortcode');
+add_shortcode('daraza_checkout', 'daraza_checkout_shortcode');
