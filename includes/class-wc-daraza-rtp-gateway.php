@@ -1,19 +1,19 @@
 <?php
 if ( ! defined( 'ABSPATH' ) ) {
-    exit; // Exit if accessed directly to prevent direct script access
+    exit; // Exit if accessed directly.
 }
+
+use Automattic\WooCommerce\Blocks\Payments\Integrations\AbstractPaymentMethodType;
 
 /**
  * WooCommerce Daraza Request to Pay Payment Gateway
  *
- * Provides a secure payment gateway integration for Daraza Request to Pay
- *
- * @class WC_Daraza_RTP_Gateway
- * @extends WC_Payment_Gateway
+ * Provides a secure payment gateway integration for Daraza Request to Pay.
  */
 class WC_Daraza_RTP_Gateway extends WC_Payment_Gateway {
+    
     /**
-     * Constructor for the gateway
+     * Constructor for the gateway.
      */
     public function __construct() {
         $this->id                 = 'daraza_rtp';
@@ -23,6 +23,7 @@ class WC_Daraza_RTP_Gateway extends WC_Payment_Gateway {
         $this->supports           = [
             'products',
             'refunds',
+            'block', // Declare support for block-based checkout
         ];
 
         // Initialize settings
@@ -32,31 +33,66 @@ class WC_Daraza_RTP_Gateway extends WC_Payment_Gateway {
         // Load gateway settings
         $this->configure_gateway_settings();
 
-        // Add hooks
+        // Add hooks for admin and processing.
         $this->add_gateway_hooks();
+
+        // Always ensure this gateway is available.
+        add_filter('woocommerce_payment_gateway_is_available', [$this, 'is_gateway_available'], 10, 2);
+
+        // Register for block-based checkout.
+        add_action('woocommerce_blocks_loaded', [$this, 'register_block_gateway']);
     }
 
     /**
-     * Configure gateway settings from options
+     * Register payment method for WooCommerce Blocks.
+     */
+    public function register_block_gateway() {
+        if ( class_exists( AbstractPaymentMethodType::class ) ) {
+            // Make sure the blocks integration file is loaded.
+            include_once plugin_dir_path( __FILE__ ) . 'class-wc-daraza-rtp-blocks.php';
+            add_action( 'woocommerce_blocks_payment_method_type_registration', function ( $payment_registry ) {
+                $payment_registry->register( new WC_Daraza_RTP_Blocks() );
+            });
+        }
+    }
+
+    /**
+     * Custom availability check.
+     */
+    public function is_gateway_available( $is_available, $gateway ) {
+        if ( $gateway->id === $this->id ) {
+            return true;
+        }
+        return $is_available;
+    }
+
+    /**
+     * Override the is_available method to ensure it shows up.
+     */
+    public function is_available() {
+        return true;
+    }
+
+    /**
+     * Configure gateway settings from options.
      */
     private function configure_gateway_settings() {
-        $this->enabled     = $this->get_option( 'enabled', 'no' );
-        $this->title       = $this->get_option( 'title', __( 'Pay with Daraza', 'daraza-payments' ) );
-        $this->description = $this->get_option( 'description', __( 'Securely pay using Daraza Request to Pay.', 'daraza-payments' ) );
-        $this->api_key     = $this->get_option( 'api_key' );
+        $this->enabled         = $this->get_option( 'enabled', 'no' );
+        $this->title           = $this->get_option( 'title', __( 'Pay with Daraza', 'daraza-payments' ) );
+        $this->description     = $this->get_option( 'description', __( 'Securely pay using Daraza Request to Pay.', 'daraza-payments' ) );
+        $this->api_key         = $this->get_option( 'api_key' );
         $this->logging_enabled = $this->get_option( 'logging', 'no' ) === 'yes';
     }
 
     /**
-     * Add necessary WordPress/WooCommerce hooks
+     * Add necessary hooks.
      */
     private function add_gateway_hooks() {
-        // Save admin options
         add_action( 'woocommerce_update_options_payment_gateways_' . $this->id, [ $this, 'process_admin_options' ] );
     }
 
     /**
-     * Define settings fields for the gateway
+     * Define settings fields for the gateway.
      */
     public function init_form_fields() {
         $this->form_fields = [

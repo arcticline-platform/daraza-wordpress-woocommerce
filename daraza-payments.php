@@ -47,6 +47,7 @@ function daraza_initialize_plugin() {
         // WooCommerce-specific functionality
         // require_once DARAZA_PAYMENTS_DIR . 'includes/class-daraza-gateway.php';
         require_once DARAZA_PAYMENTS_DIR . 'includes/class-wc-daraza-rtp-gateway.php';
+        require_once plugin_dir_path( __FILE__ ) . 'includes/class-wc-daraza-rtp-blocks.php';
 
 
         function daraza_add_woocommerce_gateway($gateways) {
@@ -56,6 +57,11 @@ function daraza_initialize_plugin() {
             
             return $gateways;
         }
+        // Register block integration for WooCommerce Blocks.
+        add_action( 'woocommerce_blocks_payment_method_type_registration', function ( $payment_registry ) {
+            $payment_registry->register( new WC_Daraza_RTP_Blocks() );
+        });
+
         add_filter('woocommerce_payment_gateways', 'daraza_add_woocommerce_gateway');
 
     } else {
@@ -63,6 +69,42 @@ function daraza_initialize_plugin() {
         add_action('admin_menu', 'daraza_add_admin_menu');
     }
 }
+
+
+function daraza_debug_payment_gateways() {
+    if (is_checkout()) {
+        $available_gateways = WC()->payment_gateways->get_available_payment_gateways();
+        error_log('Available Payment Gateways:');
+        foreach ($available_gateways as $gateway) {
+            error_log('Gateway ID: ' . $gateway->id);
+            error_log('Gateway Title: ' . $gateway->title);
+            error_log('Gateway Enabled: ' . ($gateway->enabled === 'yes' ? 'Yes' : 'No'));
+        }
+    }
+}
+add_action('wp_footer', 'daraza_debug_payment_gateways');
+
+// Additional initialization to ensure gateway is loaded
+function daraza_ensure_gateway_loaded() {
+    if (class_exists('WC_Payment_Gateway') && !class_exists('WC_Daraza_RTP_Gateway')) {
+        require_once plugin_dir_path(__FILE__) . 'includes/class-wc-daraza-rtp-gateway.php';
+    }
+}
+add_action('woocommerce_init', 'daraza_ensure_gateway_loaded');
+
+// add_action( 'plugins_loaded', 'cwoa_authorizenet_aim_init', 0 );
+// function cwoa_authorizenet_aim_init() {
+// //if condition use to do nothin while WooCommerce is not installed
+//   if ( ! class_exists( 'WC_Payment_Gateway' ) ) return;
+//   require_once DARAZA_PAYMENTS_DIR . 'includes/cloudways-authorize-woocommerce-gateway.php';
+//   // class add it too WooCommerce
+//   add_filter( 'woocommerce_payment_gateways', 'cwoa_add_authorizenet_aim_gateway' );
+//   function cwoa_add_authorizenet_aim_gateway( $methods ) {
+//     $methods[] = 'cwoa_AuthorizeNet_AIM';
+//     return $methods;
+//   }
+// }
+
 
 // Add admin menu for non-WooCommerce users
 function daraza_add_admin_menu() {
