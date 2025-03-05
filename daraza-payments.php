@@ -45,17 +45,18 @@ add_action('plugins_loaded', 'daraza_initialize_plugin');
 function daraza_initialize_plugin() {
     if (class_exists('WooCommerce')) {
         // WooCommerce-specific functionality
-        require_once DARAZA_PAYMENTS_DIR . 'includes/class-daraza-gateway.php';
-        require_once DARAZA_PAYMENTS_DIR . 'includes/class-daraza-rtp-gateway.php';
+        // require_once DARAZA_PAYMENTS_DIR . 'includes/class-daraza-gateway.php';
+        require_once DARAZA_PAYMENTS_DIR . 'includes/class-wc-daraza-rtp-gateway.php';
 
-        add_filter('woocommerce_payment_gateways', 'daraza_add_woocommerce_gateway');
 
         function daraza_add_woocommerce_gateway($gateways) {
-            $gateways[] = 'Daraza_Gateway';
+            // $gateways[] = 'Daraza_Gateway';
+            error_log('Adding Daraza RTP Gateway');
             $gateways[] = 'WC_Daraza_RTP_Gateway'; // Add the Request to Pay gateway
             
             return $gateways;
         }
+        add_filter('woocommerce_payment_gateways', 'daraza_add_woocommerce_gateway');
 
     } else {
         // General WordPress-specific functionality
