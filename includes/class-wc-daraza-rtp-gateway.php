@@ -16,7 +16,8 @@ class WC_Daraza_RTP_Gateway extends WC_Payment_Gateway {
     public function __construct() {
         $this->id                 = 'daraza_rtp';
         $this->method_title       = __( 'Daraza Pay', 'daraza-payments' );
-        $this->method_description = __( 'Accept secure payments using Daraza Request to Pay service.', 'daraza-payments' );
+        $this->method_description = __( 'Accept secure payments using the Daraza Request to Pay service. This gateway enables you to process payments securely by integrating with Daraza’s API. To get started, log in to your Daraza account at <a href="https://dashboard.daraza.com" target="_blank">https://dashboard.daraza.com</a>, create a business profile and then an app to get a new API key if you haven’t done so already. Once you have your API key, enter it in the plugin settings here. This integration supports standard products, refunds, and block-based checkout, ensuring a seamless experience for both you and your customers.', 'daraza-payments' );
+        $this->icon               = ''; // URL to the gateway icon
         $this->has_fields         = true; // Enable custom checkout fields
         $this->supports           = [
             'products',
@@ -141,8 +142,8 @@ class WC_Daraza_RTP_Gateway extends WC_Payment_Gateway {
             'api_key' => [
                 'title'       => __( 'API Key', 'daraza-payments' ),
                 'type'        => 'password',
-                'description' => __( 'Enter your Daraza API key. Keep this confidential.', 'daraza-payments' ),
-                'desc_tip'    => true,
+                'description' => __( 'Enter your Daraza API key. Keep this confidential. To obtain your API key, log into your Daraza account at <a href="https://dashboard.daraza.com" target="_blank">https://dashboard.daraza.com</a>. Once logged in, create a business profile and then an app to get a new API key if you haven’t done so already', 'daraza-payments' ),
+                'default'     => '',
             ],
             'logging' => [
                 'title'       => __( 'Enable Logging', 'daraza-payments' ),
