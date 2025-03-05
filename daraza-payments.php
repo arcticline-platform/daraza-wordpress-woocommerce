@@ -45,21 +45,72 @@ add_action('plugins_loaded', 'daraza_initialize_plugin');
 function daraza_initialize_plugin() {
     if (class_exists('WooCommerce')) {
         // WooCommerce-specific functionality
-        // require_once DARAZA_PAYMENTS_DIR . 'includes/class-daraza-gateway.php';
         require_once DARAZA_PAYMENTS_DIR . 'includes/class-wc-daraza-rtp-gateway.php';
-        require_once plugin_dir_path( __FILE__ ) . 'includes/class-wc-daraza-rtp-blocks.php';
-
+        require_once DARAZA_PAYMENTS_DIR . 'includes/class-wc-daraza-rtp-blocks.php';
 
         function daraza_add_woocommerce_gateway($gateways) {
-            // $gateways[] = 'Daraza_Gateway';
-            error_log('Adding Daraza RTP Gateway');
             $gateways[] = 'WC_Daraza_RTP_Gateway'; // Add the Request to Pay gateway
-            
+            // $gateways[] = 'Daraza_RTP'; // Add Daraza RTP
             return $gateways;
         }
-        // Register block integration for WooCommerce Blocks.
-        add_action( 'woocommerce_blocks_payment_method_type_registration', function ( $payment_registry ) {
-            $payment_registry->register( new WC_Daraza_RTP_Blocks() );
+
+        /**
+         * Custom function to declare compatibility with cart_checkout_blocks feature 
+        */
+        function declare_checkout_blocks_compatibility() {
+            // Check if the required class exists
+            if (class_exists('\Automattic\WooCommerce\Utilities\FeaturesUtil')) {
+                // Declare compatibility for 'cart_checkout_blocks'
+                \Automattic\WooCommerce\Utilities\FeaturesUtil::declare_compatibility('cart_checkout_blocks', __FILE__, true);
+            }
+        }
+
+        // Hook the custom function to the 'before_woocommerce_init' action
+        add_action('before_woocommerce_init', 'declare_checkout_blocks_compatibility');
+
+        add_action('woocommerce_blocks_payment_method_type_registration',
+            function( Automattic\WooCommerce\Blocks\Payments\PaymentMethodRegistry $payment_method_registry ) {
+                // Register an instance of My_Custom_Gateway_Blocks
+                $payment_method_registry->register( new WC_Daraza_RTP_Blocks );
+            }
+        );
+
+        function daraza_debug_payment_gateways() {
+            if (is_checkout()) {
+                $available_gateways = WC()->payment_gateways->get_available_payment_gateways();
+                error_log('Available Payment Gateways:');
+                foreach ($available_gateways as $gateway) {
+                    error_log('Gateway ID: ' . $gateway->id);
+                    error_log('Gateway Title: ' . $gateway->title);
+                    error_log('Gateway Enabled: ' . ($gateway->enabled === 'yes' ? 'Yes' : 'No'));
+                }
+            }
+        }
+        add_action('wp_footer', 'daraza_debug_payment_gateways');
+        
+        // Additional initialization to ensure gateway is loaded
+        function daraza_ensure_gateway_loaded() {
+            if (class_exists('WC_Payment_Gateway') && !class_exists('WC_Daraza_RTP_Gateway')) {
+                require_once plugin_dir_path(__FILE__) . 'includes/class-wc-daraza-rtp-gateway.php';
+            }
+        }
+        add_action('woocommerce_init', 'daraza_ensure_gateway_loaded');
+
+        add_action( 'woocommerce_checkout_update_order_meta', function( $order_id ) {
+            if ( isset( $_POST['daraza_phone'] ) ) {
+                update_post_meta( $order_id, '_daraza_phone', sanitize_text_field( $_POST['daraza_phone'] ) );
+            }
+        });
+
+        // ********** Filters **********
+        add_filter( 'woocommerce_checkout_fields', function( $fields ) {
+            $fields['billing']['daraza_phone'] = [
+                'type'        => 'tel',
+                'label'       => __( 'Phone Number', 'daraza-payments' ),
+                'placeholder' => __( 'Enter your phone number', 'daraza-payments' ),
+                'required'    => true,
+            ];
+            return $fields;
         });
 
         add_filter('woocommerce_payment_gateways', 'daraza_add_woocommerce_gateway');
@@ -69,42 +120,6 @@ function daraza_initialize_plugin() {
         add_action('admin_menu', 'daraza_add_admin_menu');
     }
 }
-
-
-function daraza_debug_payment_gateways() {
-    if (is_checkout()) {
-        $available_gateways = WC()->payment_gateways->get_available_payment_gateways();
-        error_log('Available Payment Gateways:');
-        foreach ($available_gateways as $gateway) {
-            error_log('Gateway ID: ' . $gateway->id);
-            error_log('Gateway Title: ' . $gateway->title);
-            error_log('Gateway Enabled: ' . ($gateway->enabled === 'yes' ? 'Yes' : 'No'));
-        }
-    }
-}
-add_action('wp_footer', 'daraza_debug_payment_gateways');
-
-// Additional initialization to ensure gateway is loaded
-function daraza_ensure_gateway_loaded() {
-    if (class_exists('WC_Payment_Gateway') && !class_exists('WC_Daraza_RTP_Gateway')) {
-        require_once plugin_dir_path(__FILE__) . 'includes/class-wc-daraza-rtp-gateway.php';
-    }
-}
-add_action('woocommerce_init', 'daraza_ensure_gateway_loaded');
-
-// add_action( 'plugins_loaded', 'cwoa_authorizenet_aim_init', 0 );
-// function cwoa_authorizenet_aim_init() {
-// //if condition use to do nothin while WooCommerce is not installed
-//   if ( ! class_exists( 'WC_Payment_Gateway' ) ) return;
-//   require_once DARAZA_PAYMENTS_DIR . 'includes/cloudways-authorize-woocommerce-gateway.php';
-//   // class add it too WooCommerce
-//   add_filter( 'woocommerce_payment_gateways', 'cwoa_add_authorizenet_aim_gateway' );
-//   function cwoa_add_authorizenet_aim_gateway( $methods ) {
-//     $methods[] = 'cwoa_AuthorizeNet_AIM';
-//     return $methods;
-//   }
-// }
-
 
 // Add admin menu for non-WooCommerce users
 function daraza_add_admin_menu() {

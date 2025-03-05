@@ -3,8 +3,6 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit; // Exit if accessed directly.
 }
 
-use Automattic\WooCommerce\Blocks\Payments\Integrations\AbstractPaymentMethodType;
-
 /**
  * WooCommerce Daraza Request to Pay Payment Gateway
  *
@@ -41,18 +39,29 @@ class WC_Daraza_RTP_Gateway extends WC_Payment_Gateway {
 
         // Register for block-based checkout.
         add_action('woocommerce_blocks_loaded', [$this, 'register_block_gateway']);
+        add_action('woocommerce_update_options_payment_gateways_' . $this->id, array($this, 'process_admin_options'));
     }
 
     /**
      * Register payment method for WooCommerce Blocks.
      */
     public function register_block_gateway() {
-        if ( class_exists( AbstractPaymentMethodType::class ) ) {
-            // Make sure the blocks integration file is loaded.
-            include_once plugin_dir_path( __FILE__ ) . 'class-wc-daraza-rtp-blocks.php';
-            add_action( 'woocommerce_blocks_payment_method_type_registration', function ( $payment_registry ) {
-                $payment_registry->register( new WC_Daraza_RTP_Blocks() );
-            });
+        if ( class_exists( 'Automattic\WooCommerce\Blocks\Payments\Integrations\AbstractPaymentMethodType' ) ) {
+
+            // Ensure the blocks integration file is loaded
+            $blocks_integration_file = plugin_dir_path( __FILE__ ) . 'includes/daraza-rtp-blocks.php';
+            if ( file_exists( $blocks_integration_file ) ) {
+                require_once $blocks_integration_file;
+            }
+
+            add_action( 
+                'woocommerce_blocks_payment_method_type_registration', 
+                function ( $payment_method_registry ) {
+                    $payment_method_registry->register( 
+                        new WC_Daraza_RTP_Blocks() 
+                    );
+                }
+            );
         }
     }
 
@@ -141,10 +150,10 @@ class WC_Daraza_RTP_Gateway extends WC_Payment_Gateway {
         }
 
         // Phone number input field
-        woocommerce_form_field( 'daraza_phone', [
+        woocommerce_form_field( 'daraza_rtp_phone', [
             'type'        => 'tel',
             'label'       => __( 'Phone Number', 'daraza-payments' ),
-            'placeholder' => __( 'Enter your phone number', 'daraza-payments' ),
+            'placeholder' => __( 'Enter your mobile money phone number', 'daraza-payments' ),
             'required'    => true,
             'input_class' => [ 'form-control' ],
             'custom_attributes' => [
@@ -160,19 +169,26 @@ class WC_Daraza_RTP_Gateway extends WC_Payment_Gateway {
      * @return bool
      */
     public function validate_fields() {
-        $phone = isset( $_POST['daraza_phone'] ) ? sanitize_text_field( wp_unslash( $_POST['daraza_phone'] ) ) : '';
+        error_log(print_r($_POST, true)); // Debugging: Log all form data
 
+        // Check for phone in payment_method_data (block-based checkout) first.
+        $phone = '';
+        if ( isset( $_POST['payment_method_data']['daraza_rtp_phone'] ) ) {
+            $phone = sanitize_text_field( wp_unslash( $_POST['payment_method_data']['daraza_rtp_phone'] ) );
+        } elseif ( isset( $_POST['daraza_rtp_phone'] ) ) {
+            $phone = sanitize_text_field( wp_unslash( $_POST['daraza_rtp_phone'] ) );
+        }
+    
         if ( empty( $phone ) ) {
             wc_add_notice( __( 'Phone number is required to complete the payment.', 'daraza-payments' ), 'error' );
             return false;
         }
-
-        // Additional phone number validation
+    
         if ( ! preg_match( '/^[0-9]{10,14}$/', $phone ) ) {
             wc_add_notice( __( 'Invalid phone number format.', 'daraza-payments' ), 'error' );
             return false;
         }
-
+    
         return true;
     }
 
@@ -183,24 +199,31 @@ class WC_Daraza_RTP_Gateway extends WC_Payment_Gateway {
      * @return array
      */
     public function process_payment( $order_id ) {
-        // Retrieve order and phone details
         $order = wc_get_order( $order_id );
-        $phone = sanitize_text_field( wp_unslash( $_POST['daraza_phone'] ) );
+    
+        // Retrieve phone from payment_method_data (block-based checkout) if available.
+        $phone = '';
+        if ( isset( $_POST['payment_method_data']['daraza_rtp_phone'] ) ) {
+            $phone = sanitize_text_field( wp_unslash( $_POST['payment_method_data']['daraza_rtp_phone'] ) );
+        } elseif ( isset( $_POST['daraza_rtp_phone'] ) ) {
+            $phone = sanitize_text_field( wp_unslash( $_POST['daraza_rtp_phone'] ) );
+        }
+    
         $amount = $order->get_total();
         $reference = 'Order-' . $order_id;
-
+    
         // Validate API key
         if ( empty( $this->api_key ) ) {
             $this->log_error( 'Payment failed: API key is not configured.' );
             wc_add_notice( __( 'Payment setup error. Please contact site administrator.', 'daraza-payments' ), 'error' );
             return [ 'result' => 'failure' ];
         }
-
+    
         try {
             // Use dependency injection for better testability
             $api = $this->get_daraza_api();
             $response = $api->request_to_pay( $amount, $phone, $reference );
-
+    
             // Process API response
             return $this->handle_payment_response( $order, $response );
         } catch ( Exception $e ) {
@@ -208,7 +231,7 @@ class WC_Daraza_RTP_Gateway extends WC_Payment_Gateway {
             wc_add_notice( __( 'Payment processing failed. Please try again.', 'daraza-payments' ), 'error' );
             return [ 'result' => 'failure' ];
         }
-    }
+    } 
 
     /**
      * Handle payment gateway API response
