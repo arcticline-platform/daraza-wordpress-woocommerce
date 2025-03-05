@@ -1,23 +1,25 @@
 (function() {
-    // Retrieve settings from PHP; ensure the key matches your PHP integration.
+    // Retrieve settings from PHP.
+    // Make sure your PHP integration passes an object using the key "daraza_payments_data".
     var settings = window.wc.wcSettings.getSetting('daraza_payments_data', {});
 
-    // Decode the title; use a default if not provided.
+    // Decode the title; fallback to a default if not provided.
     var title = window.wp.htmlEntities.decodeEntities(settings.title) ||
                 window.wp.i18n.__('Pay with Daraza', 'daraza-payments');
 
     // Decode the description and instructions.
-    var description = window.wp.htmlEntities.decodeEntities(settings.description || '');
-    var instructions = window.wp.htmlEntities.decodeEntities(settings.instructions || '');
+    var description = window.wp.htmlEntities.decodeEntities(settings.description || 'Securely Pay with Daraza');
+    var instructions = window.wp.htmlEntities.decodeEntities(settings.instructions || 'Enter your mobile money number to complete payment. You will receives a payment request on your phone to approve the payment. Please make sure you have sufficient balance on your mobile money account. Standard network charges may apply. ');
 
-    // Component to render the phone input field with validation.
+    // Component: PaymentForm
+    // Renders the phone input field with validation and registers a payment-processing callback.
     function PaymentForm(props) {
         var useState = window.wp.element.useState;
         var useEffect = window.wp.element.useEffect;
         var _a = useState(''), phone = _a[0], setPhone = _a[1];
         var _b = useState(''), error = _b[0], setError = _b[1];
 
-        // Helper to validate the phone field.
+        // Helper function to validate the phone number.
         function validatePhone(value) {
             if (value.trim() === '') {
                 return window.wp.i18n.__('Phone number is required.', 'daraza-payments');
@@ -34,7 +36,7 @@
             setError(errorMsg);
         }
 
-        // Register the callback to process payment data.
+        // Register callback for when the checkout processes payment.
         useEffect(function() {
             var unsubscribe = props.eventRegistration.onPaymentProcessing(function() {
                 var errorMsg = validatePhone(phone);
@@ -62,7 +64,7 @@
         return window.wp.element.createElement(
             'div',
             { className: 'daraza-payment-form', style: { marginTop: '10px', padding: '10px' } },
-            // Show error alert if validation fails.
+            // Show error message if any.
             error && window.wp.element.createElement(
                 'div',
                 {
@@ -103,8 +105,8 @@
         );
     }
 
-    // Component to render the complete content for the payment method,
-    // including description, instructions, and the phone input.
+    // Component: DarazaContent
+    // Renders the gateway description, extra instructions, and the phone input form.
     function DarazaContent(props) {
         return window.wp.element.createElement(
             'div',
@@ -124,7 +126,8 @@
         );
     }
 
-    // Component to render an icon if an icon URL is provided.
+    // Component: Icon
+    // Renders an icon image if provided in settings.
     function Icon() {
         if (settings.icons) {
             return window.wp.element.createElement('img', {
@@ -136,7 +139,8 @@
         return null;
     }
 
-    // Combine the title and icon into a single label component.
+    // Component: LabelComponent
+    // Combines the gateway title and the icon.
     function LabelComponent() {
         return window.wp.element.createElement(
             'span',
@@ -148,7 +152,7 @@
 
     // Build the payment method registration object.
     var paymentMethod = {
-        // This name must match the gateway ID in your PHP class.
+        // The "name" here must match the PHP gateway ID.
         name: 'daraza_rtp',
         label: window.wp.element.createElement(LabelComponent, null),
         content: window.wp.element.createElement(DarazaContent, null),
