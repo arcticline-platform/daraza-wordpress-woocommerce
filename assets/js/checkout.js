@@ -1,23 +1,30 @@
 // assets/js/block-payment.js
 
 // Retrieve settings for Daraza RTP payment method.
-const settings = window.wc.wcSettings.getSetting( 'daraza_rtp_data', {} );
+const settings = window.wc.wcSettings.getSetting('daraza_payments_data', {});
 
 // Decode the title; fallback to a localized default if needed.
 const label =
-    window.wp.htmlEntities.decodeEntities( settings.title ) ||
-    window.wp.i18n.__( 'Daraza RTP', 'daraza-payments' );
+    window.wp.htmlEntities.decodeEntities(settings.title) ||
+    window.wp.i18n.__('Daraza RTP', 'daraza-payments');
 
-// Function to auto-validate phone input as the user types.
-const validatePhone = ( event ) => {
+// Function to validate phone input with more robust validation.
+const validatePhone = (event) => {
     const input = event.target;
-    const value = input.value;
-    const regex = /^[0-9]{10,14}$/;
-    // Change border color based on validation.
-    if ( !regex.test( value ) ) {
-        input.style.borderColor = 'red';
-    } else {
+    const value = input.value.trim();
+    // Regex to match international phone number formats.
+    const regex = /^(\+\d{1,3}[- ]?)?\d{10,14}$/;
+
+    if (regex.test(value)) {
+        input.setCustomValidity('');
         input.style.borderColor = 'green';
+        return true;
+    } else {
+        input.setCustomValidity(
+            window.wp.i18n.__('Please enter a valid phone number', 'daraza-payments')
+        );
+        input.style.borderColor = 'red';
+        return false;
     }
 };
 
@@ -42,7 +49,7 @@ const Content = () => {
                 className: 'daraza-description',
                 style: { marginBottom: '1rem', fontSize: '14px', color: '#333' }
             },
-            window.wp.htmlEntities.decodeEntities( settings.description || '' )
+            window.wp.htmlEntities.decodeEntities(settings.description || '')
         ),
         // Phone input container.
         window.wp.element.createElement(
@@ -54,20 +61,20 @@ const Content = () => {
             window.wp.element.createElement(
                 'label',
                 {
-                    htmlFor: 'daraza_rtp_phone',
+                    htmlFor: 'daraza_phone',
                     style: { display: 'block', marginBottom: '0.5rem', fontWeight: 'bold', fontSize: '14px' }
                 },
-                window.wp.i18n.__( 'Phone Number', 'daraza-payments' )
+                window.wp.i18n.__('Phone Number', 'daraza-payments')
             ),
             window.wp.element.createElement(
                 'input',
                 {
                     type: 'tel',
                     id: 'daraza_phone',
-                    name: 'daraza_rtp_phone', // Added name attribute
+                    name: 'daraza_phone',
                     required: true,
-                    pattern: '^[0-9]{10,14}$',
-                    placeholder: window.wp.i18n.__( 'Enter your mobile money phone number for payment', 'daraza-payments' ),
+                    pattern: '^(\+\d{1,3}[- ]?)?\d{10,14}$',
+                    placeholder: window.wp.i18n.__('Enter your mobile money phone number', 'daraza-payments'),
                     style: {
                         width: '100%',
                         padding: '0.5rem',
@@ -77,6 +84,8 @@ const Content = () => {
                         boxSizing: 'border-box'
                     },
                     onInput: validatePhone,
+                    'aria-required': 'true',
+                    'aria-label': window.wp.i18n.__('Mobile Money Phone Number', 'daraza-payments')
                 }
             )
         )
@@ -91,7 +100,7 @@ const Edit = () => {
             className: 'daraza-payment-method-edit',
             style: { fontFamily: 'Arial, sans-serif', fontSize: '16px', fontWeight: 'bold', padding: '0.5rem' }
         },
-        window.wp.htmlEntities.decodeEntities( settings.title || '' )
+        window.wp.htmlEntities.decodeEntities(settings.title || '')
     );
 };
 
@@ -99,29 +108,80 @@ const Edit = () => {
 const DarazaBlock = {
     name: 'daraza_rtp',
     label: label,
-    content: window.wp.element.createElement( Content, null ),
-    edit: window.wp.element.createElement( Edit, null ),
+    content: window.wp.element.createElement(Content, null),
+    edit: window.wp.element.createElement(Edit, null),
     canMakePayment: () => true,
     ariaLabel: label,
     supports: {
         features: settings.supports,
     },
+    // onSubmit: Validate and include the phone number.
     onSubmit: (fields) => {
+        const phoneInput = document.getElementById('daraza_phone');
+        if (!phoneInput || !validatePhone({ target: phoneInput })) {
+            throw new Error(window.wp.i18n.__('Invalid phone number', 'daraza-payments'));
+        }
         return {
             ...fields,
-            daraza_phone: document.getElementById('daraza_phone').value,
+            daraza_phone: phoneInput.value.trim(),
         };
     },
-    // Capture the phone number value to include with the payment submission.
+    // getPaymentMethodData: Returns the phone number.
     getPaymentMethodData: () => {
-        const phoneInput = document.getElementById( 'daraza_phone' );
-        console.log(phoneInput);
+        const phoneInput = document.getElementById('daraza_phone');
         return {
-            daraza_phone: phoneInput ? phoneInput.value : '',
+            daraza_phone: phoneInput ? phoneInput.value.trim() : '',
         };
     },
+    // setPaymentMethodData: Sets the phone field's value.
+    setPaymentMethodData: (data) => {
+        const phoneInput = document.getElementById('daraza_phone');
+        if (phoneInput) {
+            const phoneValue = data.daraza_phone || '';
+            phoneInput.value = phoneValue;
+            validatePhone({ target: phoneInput });
+        }
+    },
+    // Initialize paymentMethodData.
+    paymentMethodData: {
+        daraza_phone: '',
+    },
+    // prepare: Validate and prepare the data.
+    prepare: () => {
+        const phoneInput = document.getElementById('daraza_phone');
+        const phoneNumber = phoneInput ? phoneInput.value.trim() : '';
 
+        if (!phoneNumber || !validatePhone({ target: phoneInput })) {
+            throw new Error(window.wp.i18n.__('Please enter a valid phone number', 'daraza-payments'));
+        }
+        return {
+            daraza_phone: phoneNumber
+        };
+    },
+    // processPaymentMethodData: Use consistent key name.
+    processPaymentMethodData: (data) => {
+        const phoneInput = document.getElementById('daraza_phone');
+        const phoneNumber = phoneInput ? phoneInput.value.trim() : '';
+        return {
+            ...data,
+            daraza_phone: phoneNumber
+        };
+    }
 };
 
 // Register the payment method.
-window.wc.wcBlocksRegistry.registerPaymentMethod( DarazaBlock );
+wp.hooks.addFilter(
+    'woocommerce_blocks_payment_method_data',
+    'daraza-payments/custom-payment-data',
+    (paymentData, paymentMethodName) => {
+        if ( paymentMethodName === 'daraza_rtp' ) {
+            const phoneInput = document.getElementById('daraza_phone');
+            if ( phoneInput ) {
+                // Add the phone number to the paymentData object.
+                paymentData.daraza_phone = phoneInput.value.trim();
+            }
+        }
+        return paymentData;
+    }
+);
+

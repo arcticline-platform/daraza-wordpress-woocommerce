@@ -38,7 +38,7 @@ class WC_Daraza_RTP_Blocks extends AbstractPaymentMethodType {
     public function get_payment_method_script_handles() {
         wp_register_script(
             'daraza_gateway-blocks-integration',
-            plugins_url( '../assets/js/checkout.js', __FILE__ ),
+            plugins_url( '../assets/js/block_checkout.js', __FILE__ ),
             [
                 'wc-blocks-registry',
                 'wc-settings',
@@ -79,21 +79,19 @@ class WC_Daraza_RTP_Blocks extends AbstractPaymentMethodType {
             'description' => $this->settings['description'] ?? __( 'Securely pay using Daraza Pay.', 'daraza-payments' ),
             'supports'    => $this->get_supported_features(),
             'icons'       => $this->get_payment_method_icons(),
-            // Add custom field definitions to be used by the block UI.
-            'fields'      => [
-                [
-                    'id'          => 'daraza_phone',
-                    'name'        => 'daraza_phone',
+            // Use custom_fields to register additional fields for Blocks checkout.
+            'custom_fields' => [
+                'daraza_rtp_phone' => [
                     'type'        => 'tel',
                     'label'       => __( 'Phone Number', 'daraza-payments' ),
-                    'placeholder' => __( 'Enter your phone number', 'daraza-payments' ),
-                    'pattern'     => '^[0-9]{10,14}$',
+                    'placeholder' => __( 'Enter your mobile money phone number for payment', 'daraza-payments' ),
                     'required'    => true,
                 ],
             ],
         ];
-    }    
-
+    }
+    
+    
     /**
      * Get payment method icons
      *
