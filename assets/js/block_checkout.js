@@ -9,7 +9,7 @@
 
     // Decode the description and instructions.
     var description = window.wp.htmlEntities.decodeEntities(settings.description || 'Securely Pay with Daraza');
-    var instructions = window.wp.htmlEntities.decodeEntities(settings.instructions || 'Enter your mobile money number to complete payment. You will receives a payment request on your phone to approve the payment. Please make sure you have sufficient balance on your mobile money account. Standard network charges may apply. ');
+    var instructions = window.wp.htmlEntities.decodeEntities(settings.instructions || 'Enter your mobile money number to complete payment. You will receive a payment request on your phone to approve the payment. Please make sure you have sufficient balance on your mobile money account. Standard network charges may apply. ');
 
     // Component: PaymentForm
     // Renders the phone input field with validation and registers a payment-processing callback.
