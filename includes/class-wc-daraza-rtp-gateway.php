@@ -16,7 +16,7 @@ class WC_Daraza_RTP_Gateway extends WC_Payment_Gateway {
     public function __construct() {
         $this->id                 = 'daraza_rtp';
         $this->method_title       = __( 'Daraza Pay', 'daraza-payments' );
-        $this->method_description = __( 'Accept secure payments using the Daraza Request to Pay service. This gateway enables you to process payments securely by integrating with Daraza’s API. To get started, log in to your Daraza account at <a href="https://dashboard.daraza.com" target="_blank">https://dashboard.daraza.com</a>, create a business profile and then an app to get a new API key if you haven’t done so already. Once you have your API key, enter it in the plugin settings here. This integration supports standard products, refunds, and block-based checkout, ensuring a seamless experience for both you and your customers.', 'daraza-payments' );
+        $this->method_description = __( 'Accept secure payments using the Daraza Request to Pay service. This gateway enables you to process payments securely by integrating with Daraza’s API. To get started, log in to your Daraza account at <a href="https://daraza.net/accounts/user_account/" target="_blank">https://daraza.net/accounts/user_account</a>, create a business profile and then an app to get a new API key if you haven’t done so already. Once you have your API key, enter it in the plugin settings here. This integration supports standard products, refunds, and block-based checkout, ensuring a seamless experience for both you and your customers.', 'daraza-payments' );
         $this->icon               = ''; // URL to the gateway icon
         $this->has_fields         = true; // Enable custom checkout fields
         $this->supports           = [
@@ -74,8 +74,8 @@ class WC_Daraza_RTP_Gateway extends WC_Payment_Gateway {
      * @param int $order_id WooCommerce order ID
      */
     public function daraza_save_phone_number_to_order_meta($order_id) {
-        if (isset($_POST['daraza_rtp_phone'])) {
-            update_post_meta($order_id, '_daraza_rtp_phone', sanitize_text_field($_POST['daraza_rtp_phone']));
+        if (isset($_POST['daraza_phone'])) {
+            update_post_meta($order_id, '_daraza_rtp_phone', sanitize_text_field($_POST['daraza_phone']));
         }
     }
 
@@ -184,10 +184,10 @@ class WC_Daraza_RTP_Gateway extends WC_Payment_Gateway {
      * @return bool
      */
     public function validate_fields() {
-        error_log('Payment Form Data: ' . print_r($_POST, true)); // Debugging
-        error_log('---- WooCommerce Checkout Debug ----');
-        error_log('POST Data: ' . print_r($_POST, true));
-        error_log('Payment Method Data: ' . print_r($_POST['payment_method_data'] ?? [], true));
+        // error_log('Payment Form Data: ' . print_r($_POST, true)); // Debugging
+        // error_log('---- WooCommerce Checkout Debug ----');
+        // error_log('POST Data: ' . print_r($_POST, true));
+        // error_log('Payment Method Data: ' . print_r($_POST['payment_method_data'] ?? [], true));
 
         // Check for phone in payment_method_data (block-based checkout) first.
         $phone = '';
@@ -249,8 +249,52 @@ class WC_Daraza_RTP_Gateway extends WC_Payment_Gateway {
             wc_add_notice( __( 'Payment processing failed. Please try again.', 'daraza-payments' ), 'error' );
             return [ 'result' => 'failure' ];
         }
-    } 
+    }
 
+    /**
+     * Process refund for the given order.
+     *
+     * @param int    $order_id Order ID.
+     * @param float  $amount   Refund amount.
+     * @param string $reason   Reason for the refund.
+     * @return bool|WP_Error True on success, WP_Error on failure.
+     */
+    public function process_refund( $order_id, $amount = null, $reason = '' ) {
+        $order = wc_get_order( $order_id );
+        
+        // Validate API key
+        if ( empty( $this->api_key ) ) {
+            $this->log_error( 'Refund failed: API key is not configured.' );
+            return new WP_Error( 'error', __( 'Refund setup error. Please contact site administrator.', 'daraza-payments' ) );
+        }
+        
+        // Retrieve the phone number from order meta.
+        $phone = get_post_meta( $order_id, '_daraza_rtp_phone', true );
+        if ( empty( $phone ) ) {
+            $this->log_error( 'Refund failed: Phone number not found for Order #' . $order_id );
+            return new WP_Error( 'refund_error', __( 'Refund error: Phone number not found for this order.', 'daraza-payments' ) );
+        }
+        
+        try {
+            // Use dependency injection to get the API instance
+            $api = $this->get_daraza_api();
+            // Call remit_payment for refund: pass the refund amount, phone, and note (reason)
+            $response = $api->remit_payment( $amount, $phone, $reason );
+            
+            if ( isset( $response['status'] ) && $response['status'] === 'success' ) {
+                $this->log_info( 'Refund successful for Order #' . $order_id );
+                return true;
+            }
+            
+            $error_message = $response['message'] ?? __( 'Refund request failed.', 'daraza-payments' );
+            $this->log_error( 'Refund failed for Order #' . $order_id . ': ' . $error_message );
+            return new WP_Error( 'refund_error', __( 'Refund error: ', 'daraza-payments' ) . esc_html( $error_message ) );
+        } catch ( Exception $e ) {
+            $this->log_error( 'Refund process exception for Order #' . $order_id . ': ' . $e->getMessage() );
+            return new WP_Error( 'refund_exception', __( 'Refund processing failed. Please try again.', 'daraza-payments' ) );
+        }
+    }
+    
     /**
      * Handle payment gateway API response
      *

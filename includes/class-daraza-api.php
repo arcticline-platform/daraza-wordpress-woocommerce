@@ -92,7 +92,6 @@ class Daraza_API {
             ]),
             'timeout' => 180, // Increased timeout to 3 minutes
         ]);
-
         return $this->process_response($response, 'request_to_pay');
     }
 
@@ -148,7 +147,7 @@ class Daraza_API {
         }
 
         // If the API returned an error status, log details if available.
-        if (isset($body['status']) && strtolower($body['status']) === 'error') {
+        if (isset($body['code']) && strtolower($body['code']) === 'error') {
             $error_message = $body['message'];
             if (isset($body['details']) && !empty($body['details'])) {
                 $this->log_error("API Error Details: " . $body['details'], $context);

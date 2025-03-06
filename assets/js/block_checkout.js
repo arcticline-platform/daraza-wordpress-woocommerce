@@ -22,11 +22,11 @@
         // Helper function to validate the phone number.
         function validatePhone(value) {
             if (value.trim() === '') {
-                return window.wp.i18n.__('Phone number is required.', 'daraza-payments');
+                return window.wp.i18n.__('Phone number is required!', 'daraza-payments');
             }
             var phonePattern = /^[0-9]{10,14}$/;
             if (!phonePattern.test(value)) {
-                return window.wp.i18n.__('Please enter a valid phone number.', 'daraza-payments');
+                return window.wp.i18n.__('Please enter a valid phone number!', 'daraza-payments');
             }
             return '';
         }
