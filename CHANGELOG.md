@@ -1,6 +1,6 @@
 # Changelog
 
-## [1.2] - 2025-01-XX
+## [1.2] - 2025-06-28
 
 ### Security Improvements
 
