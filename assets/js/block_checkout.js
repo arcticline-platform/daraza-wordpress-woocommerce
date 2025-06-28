@@ -1,32 +1,36 @@
 (function() {
+    'use strict';
+    
     // Retrieve settings from PHP.
     // Make sure your PHP integration passes an object using the key "daraza_payments_data".
-    var settings = window.wc.wcSettings.getSetting('daraza_payments_data', {});
+    var settings = window.wc && window.wc.wcSettings ? window.wc.wcSettings.getSetting('daraza_payments_data', {}) : {};
 
     // Decode the title; fallback to a default if not provided.
-    var title = window.wp.htmlEntities.decodeEntities(settings.title) ||
-                window.wp.i18n.__('Pay with Daraza', 'daraza-payments');
+    var title = window.wp && window.wp.htmlEntities ? window.wp.htmlEntities.decodeEntities(settings.title) : 'Pay with Daraza';
+    if (!title) {
+        title = window.wp && window.wp.i18n ? window.wp.i18n.__('Pay with Daraza', 'daraza-payments') : 'Pay with Daraza';
+    }
 
     // Decode the description and instructions.
-    var description = window.wp.htmlEntities.decodeEntities(settings.description || 'Securely Pay with Daraza');
-    var instructions = window.wp.htmlEntities.decodeEntities(settings.instructions || 'Enter your mobile money number to complete payment. You will receive a payment request on your phone to approve the payment. Please make sure you have sufficient balance on your mobile money account. Standard network charges may apply. ');
+    var description = window.wp && window.wp.htmlEntities ? window.wp.htmlEntities.decodeEntities(settings.description || 'Securely Pay with Daraza') : 'Securely Pay with Daraza';
+    var instructions = window.wp && window.wp.htmlEntities ? window.wp.htmlEntities.decodeEntities(settings.instructions || 'Enter your mobile money number to complete payment. You will receive a payment request on your phone to approve the payment. Please make sure you have sufficient balance on your mobile money account. Standard network charges may apply. ') : 'Enter your mobile money number to complete payment. You will receive a payment request on your phone to approve the payment. Please make sure you have sufficient balance on your mobile money account. Standard network charges may apply. ';
 
     // Component: PaymentForm
     // Renders the phone input field with validation and registers a payment-processing callback.
     function PaymentForm(props) {
-        var useState = window.wp.element.useState;
-        var useEffect = window.wp.element.useEffect;
+        var useState = window.wp && window.wp.element ? window.wp.element.useState : function(initial) { return [initial, function() {}]; };
+        var useEffect = window.wp && window.wp.element ? window.wp.element.useEffect : function() { return function() {}; };
         var _a = useState(''), phone = _a[0], setPhone = _a[1];
         var _b = useState(''), error = _b[0], setError = _b[1];
 
         // Helper function to validate the phone number.
         function validatePhone(value) {
-            if (value.trim() === '') {
-                return window.wp.i18n.__('Phone number is required!', 'daraza-payments');
+            if (!value || value.trim() === '') {
+                return window.wp && window.wp.i18n ? window.wp.i18n.__('Phone number is required!', 'daraza-payments') : 'Phone number is required!';
             }
             var phonePattern = /^[0-9]{10,14}$/;
             if (!phonePattern.test(value)) {
-                return window.wp.i18n.__('Please enter a valid phone number!', 'daraza-payments');
+                return window.wp && window.wp.i18n ? window.wp.i18n.__('Please enter a valid phone number!', 'daraza-payments') : 'Please enter a valid phone number!';
             }
             return '';
         }
@@ -36,8 +40,27 @@
             setError(errorMsg);
         }
 
+        function handleChange(e) {
+            var value = e.target.value;
+            // Only allow numbers
+            value = value.replace(/[^0-9]/g, '');
+            // Limit length
+            if (value.length > 14) {
+                value = value.substring(0, 14);
+            }
+            setPhone(value);
+            // Clear error if valid
+            if (validatePhone(value) === '') {
+                setError('');
+            }
+        }
+
         // Register callback for when the checkout processes payment.
         useEffect(function() {
+            if (!props.eventRegistration || !props.emitResponse) {
+                return function() {};
+            }
+            
             var unsubscribe = props.eventRegistration.onPaymentProcessing(function() {
                 var errorMsg = validatePhone(phone);
                 if (errorMsg) {
@@ -57,15 +80,26 @@
                 };
             });
             return function() {
-                unsubscribe();
+                if (unsubscribe) {
+                    unsubscribe();
+                }
             };
         }, [phone, props.eventRegistration, props.emitResponse]);
 
-        return window.wp.element.createElement(
+        // Create elements safely
+        function createElement(type, props, children) {
+            if (window.wp && window.wp.element && window.wp.element.createElement) {
+                return window.wp.element.createElement(type, props, children);
+            }
+            // Fallback for testing
+            return { type: type, props: props, children: children };
+        }
+
+        return createElement(
             'div',
             { className: 'daraza-payment-form', style: { marginTop: '10px', padding: '10px' } },
             // Show error message if any.
-            error && window.wp.element.createElement(
+            error && createElement(
                 'div',
                 {
                     className: 'daraza-payment-error',
@@ -80,20 +114,22 @@
                 },
                 error
             ),
-            window.wp.element.createElement(
+            createElement(
                 'label',
                 { htmlFor: 'daraza_phone', style: { display: 'block', marginBottom: '4px', fontWeight: 'bold' } },
-                window.wp.i18n.__('Phone Number', 'daraza-payments')
+                window.wp && window.wp.i18n ? window.wp.i18n.__('Phone Number', 'daraza-payments') : 'Phone Number'
             ),
-            window.wp.element.createElement('input', {
+            createElement('input', {
                 type: 'tel',
                 id: 'daraza_phone',
                 name: 'daraza_phone',
-                placeholder: window.wp.i18n.__('Enter your mobile money phone number', 'daraza-payments'),
+                placeholder: window.wp && window.wp.i18n ? window.wp.i18n.__('Enter your mobile money phone number', 'daraza-payments') : 'Enter your mobile money phone number',
                 required: true,
                 value: phone,
-                onChange: function(e) { setPhone(e.target.value); },
+                onChange: handleChange,
                 onBlur: handleBlur,
+                pattern: '^[0-9]{10,14}$',
+                maxLength: '14',
                 style: {
                     width: '100%',
                     padding: '12px',
@@ -108,29 +144,43 @@
     // Component: DarazaContent
     // Renders the gateway description, extra instructions, and the phone input form.
     function DarazaContent(props) {
-        return window.wp.element.createElement(
+        function createElement(type, props, children) {
+            if (window.wp && window.wp.element && window.wp.element.createElement) {
+                return window.wp.element.createElement(type, props, children);
+            }
+            return { type: type, props: props, children: children };
+        }
+
+        return createElement(
             'div',
             { className: 'daraza-payment-content', style: { fontFamily: 'Arial, sans-serif', lineHeight: '1.6', padding: '10px' } },
-            description && window.wp.element.createElement(
+            description && createElement(
                 'p',
                 { style: { marginBottom: '15px' } },
                 description
             ),
             // Render extra instructions if provided.
-            instructions && window.wp.element.createElement(
+            instructions && createElement(
                 'p',
                 { style: { marginBottom: '15px', fontStyle: 'italic', color: '#555' } },
                 instructions
             ),
-            window.wp.element.createElement(PaymentForm, props)
+            createElement(PaymentForm, props)
         );
     }
 
     // Component: Icon
     // Renders an icon image if provided in settings.
     function Icon() {
+        function createElement(type, props, children) {
+            if (window.wp && window.wp.element && window.wp.element.createElement) {
+                return window.wp.element.createElement(type, props, children);
+            }
+            return { type: type, props: props, children: children };
+        }
+
         if (settings.icons) {
-            return window.wp.element.createElement('img', {
+            return createElement('img', {
                 src: settings.icons,
                 alt: title,
                 style: { marginLeft: '8px', height: '24px', width: '24px' }
@@ -142,7 +192,14 @@
     // Component: LabelComponent
     // Combines the gateway title and the icon.
     function LabelComponent() {
-        return window.wp.element.createElement(
+        function createElement(type, props, children) {
+            if (window.wp && window.wp.element && window.wp.element.createElement) {
+                return window.wp.element.createElement(type, props, children);
+            }
+            return { type: type, props: props, children: children };
+        }
+
+        return createElement(
             'span',
             { style: { display: 'flex', alignItems: 'center', fontWeight: 'bold' } },
             title,
@@ -154,15 +211,15 @@
     var paymentMethod = {
         // The "name" here must match the PHP gateway ID.
         name: 'daraza_rtp',
-        label: window.wp.element.createElement(LabelComponent, null),
-        content: window.wp.element.createElement(DarazaContent, null),
-        edit: window.wp.element.createElement(DarazaContent, null),
+        label: window.wp && window.wp.element ? window.wp.element.createElement(LabelComponent, null) : LabelComponent(),
+        content: window.wp && window.wp.element ? window.wp.element.createElement(DarazaContent, null) : DarazaContent(),
+        edit: window.wp && window.wp.element ? window.wp.element.createElement(DarazaContent, null) : DarazaContent(),
         canMakePayment: function() {
             return true;
         },
         ariaLabel: title,
         supports: {
-            features: settings.supports
+            features: settings.supports || ['products', 'refunds']
         }
     };
 
