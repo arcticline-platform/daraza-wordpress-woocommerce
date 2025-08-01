@@ -98,7 +98,7 @@ The plugin is designed to work with any WordPress theme that supports WooCommerc
 For technical support or feature requests:
 - Visit [Daraza Support Portal](https://daraza.net)
 - Email: support@daraza.net
-- Documentation: [Daraza Docs](https://docs.daraza.net)
+- Documentation: [Daraza Docs](https://daraza.net/docs/get_started/)
 
 ## Changelog
 
